@@ -224,7 +224,7 @@ function App() {
                 style={{ width: `${progress}%` }}
               ></div>
             </div>
-            <p className="text-gray-600">Progress: {progress}%</p>
+            <p className="text-gray-600">{statusMessage}</p>
           </div>
         ) : (
           // Display the PDF and download option when complete

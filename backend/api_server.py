@@ -44,19 +44,54 @@ logger.add(sys.stderr, level=log_level, format=log_format_stdout, colorize=True,
 # Global in-memory storage for job statuses
 jobs = {}
 
+# Dictionary of humorous status messages for each processing stage
+STATUS_MESSAGES = {
+    "accepted": [
+        "Your file has arrived safely. The Data Elves are preparing their spreadsheets…",
+        "A swarm of digital bees is inspecting your CSV. They are very judgmental.",
+        "Your CSV is now in the queue. It’s wearing a tiny top hat."
+    ],
+    "validating": [
+        "Gently whispering to the data… It seems cooperative.",
+        "The Numbers Council is reviewing your data. They demand proper formatting!",
+        "Peeking inside your CSV… Ah, yes. Rows. Columns. The ingredients of statistics.",
+        "Running a vibe check on your dataset. Hope it has good energy."
+    ],
+    "analyzing": [
+        "Data Crunching in progress. The numbers are resisting, but we’re persuasive.",
+        "Spinning the Analysis Wheel… it landed on ‘Trust the Algorithm!’",
+        "Asking a Data Wizard for insights… They said ‘42.’",
+        "Your data is taking a moment to reflect on its life choices.",
+        "Inspecting every row. Some of them look suspicious."
+    ],
+    "generating": [
+        "The Report Gnomes are assembling your document. They demand coffee.",
+        "Applying Mathematical Makeup. It’s going to look so professional.",
+        "Smelting raw numbers into beautiful, delicious graphs…",
+        "A herd of bar charts is galloping across the page. Stay back!",
+        "Turning data into wisdom… or at least something printable."
+    ],
+    "finalizing": [
+        "We’re tying a little bow on your PDF. It’s almost ready for the party.",
+        "Your report is almost done. Just teaching it how to speak properly.",
+        "Translating data into human language… This is harder than it looks.",
+        "The final step: Asking the report nicely to behave."
+    ],
+    "complete": [
+        "Success! Your report has achieved enlightenment.",
+        "Your report is fresh out of the oven. Handle with care!",
+        "Behold! A PDF forged in the fires of statistical inquiry!",
+        "It is done. We shall speak of this day in legends.",
+        "Your data has reached its final form. Ready for download!"
+    ]
+}
 
-async def event_stream():
-    while True:
-        data = {
-            "timestamp": asyncio.get_running_loop().time(),
-            "value": random.uniform(10, 100)
-        }
-        yield f"data: {json.dumps(data)}\n\n"
-        await asyncio.sleep(1)
+def get_humorous_status(stage: str) -> str:
+    """
+    Returns a random humorous status message based on the given stage.
+    """
+    return random.choice(STATUS_MESSAGES.get(stage, ["Processing…"]))
 
-@app.get("/sse/stream")
-async def sse_endpoint():
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 async def job_progress(job_id: str):
@@ -73,21 +108,6 @@ async def job_progress(job_id: str):
 @app.get("/sse/job_progress/{job_id}")
 async def sse_endpoint(job_id: str):
     return StreamingResponse(job_progress(job_id), media_type="text/event-stream")
-
-
-
-@app.get("/api/hello")
-async def read_root():
-    # Create a simple pandas DataFrame
-    df = pd.DataFrame({
-        "make": ["Tesla", "Ford", "Toyota"],
-        "model": ["Model Y", "F-Series", "Corolla"],
-        "price": [64950, 33850, 29600],
-        "electric": [True, False, False]
-    })
-    # Convert DataFrame to JSON
-    json_data = df.to_dict(orient="records")
-    return {"data": json_data}
 
 
 
