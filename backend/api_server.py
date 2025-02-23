@@ -3,14 +3,20 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Q
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+import os
 import sys
 import asyncio
 import random
 import json
 import uuid
+from pathlib import Path
 from io import BytesIO
 
+from datetime import datetime
+
 import pandas as pd
+from matplotlib import pyplot as plt
+
 
 from rich.progress import Progress
 from rich.traceback import install
@@ -22,6 +28,8 @@ logger.remove()
 log_level = "DEBUG"
 log_format_stdout = "<blue>{time:%Y-%m-%d %I:%M:%S %p %Z}</blue> | <level>{level}</level> | <b>{message}</b>"
 logger.add(sys.stderr, level=log_level, format=log_format_stdout, colorize=True, backtrace=False, diagnose=False)
+
+CACHE_DIR =  Path("./cache")
 
 app = FastAPI()
 
@@ -85,47 +93,110 @@ def get_humorous_status(stage: str) -> str:
     """
     return random.choice(STATUS_MESSAGES.get(stage, ["Processing…"]))
 
-async def process_job(job_id: str, file: UploadFile):
+
+async def process_job(job_id: str, file: Path):
     """
     Simulates CSV processing and PDF report generation while updating job status with humorous messages.
     """
     job = jobs[job_id]
     try:
         # Example processing steps with humorous updates:
-        steps = [
-            ("validating", 20),
-            ("analyzing", 50),
-            ("generating", 80),
-            ("finalizing", 95)
-        ]
-        for stage, progress in steps:
-            job["status_message"] = get_humorous_status(stage)
-            job["progress"] = progress
-            await asyncio.sleep(3)  # Simulate processing delay
+        # steps = [
+        #     ("validating", 20),
+        #     ("analyzing", 50),
+        #     ("generating", 80),
+        #     ("finalizing", 95)
+        # ]
+        # for stage, progress in steps:
+        #     job["status_message"] = get_humorous_status(stage)
+        #     job["progress"] = progress
+        #     await asyncio.sleep(3)  # Simulate processing delay
 
-        # Finalizing step
+        #await asyncio.sleep(2)
+        
+        job["status_message"] = get_humorous_status("validating")
+        job["progress"] = 20
+        await asyncio.sleep(1)
+        
+        df = pd.read_csv(file)
+        print(df.head())
+        
+        output_dir = CACHE_DIR / job_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        pdf_path = output_dir / "main.pdf"
+
+        job["status_message"] = get_humorous_status("analyzing")
+        job["progress"] = 40
+        await asyncio.sleep(1)
+
+        ########################################################################################
+        # Generate the LaTeX file
+        tex = f"""\\documentclass[12pt,letterpaper]{{article}}\n"""
+        tex += '\\usepackage[includehead,headheight=10mm,margin=1cm]{geometry}\n'
+        tex += f"""\\usepackage{{graphicx}}\n"""
+        tex += f"""\\usepackage{{fontspec}}\n"""
+        tex += f"""\\usepackage{{xcolor}}\n"""
+        tex += f"""\\usepackage{{array}}\n"""
+        tex += '\\usepackage{longtable}\n'
+        tex += f"""\\usepackage{{fancyhdr}}\n"""
+
+        report_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        tex += f"""\\usepackage[pdfproducer={{diamoro.cx}},pdfsubject={{report ID {job_id} {report_timestamp}}}]{{hyperref}}\n"""
+
+        tex += f"""\\pagestyle{{fancy}}\n"""
+        #tex += f"""\\geometry{{margin=1in}}\n"""
+        
+        tex += '\\fancyhead{}\n'
+        tex += '\\renewcommand{\\headrulewidth}{0pt}' + "\n"
+
+        tex += '\\fancyhead[RO,LE]{www.ninjapivot.com}' + "\n"
+
+        tex += '\\pagenumbering{gobble}\n'
+
+        tex += '\\graphicspath{{%s}}' % output_dir + "\n"
+        
+        tex += "\\begin{document}\n"
+        
+        tex += "Hello, world!\n"
+        
+        tex += "\\end{document}\n"
+        
+        with open(output_dir / "main.tex", "w") as f:
+            f.write(tex)
+
+        # generate the PDF
+        job["status_message"] = get_humorous_status("generating")
+        job["progress"] = 60
+
+        
+        # get the current working directory
+        cwd = Path.cwd()
+        os.chdir(output_dir)
+        os.system("latexmk -lualatex -output-directory=./ ./main.tex")
+        os.chdir(cwd)
+
+
+        logger.info(f"Generated PDF report: {pdf_path}")
+
+        job["status_message"] = get_humorous_status("finalizing")
+        job["progress"] = 95
+        await asyncio.sleep(1)
+        
+        # load the PDF into memory
+        with open(pdf_path, "rb") as f:
+            job["pdf"] = f.read()
+    
+
+        # # Finalizing step
         job["status_message"] = get_humorous_status("complete")
         job["progress"] = 100
-        #await asyncio.sleep(2)
-
-        # # Generate a dummy PDF report using ReportLab
-        # from reportlab.pdfgen import canvas
-        # pdf_buffer = BytesIO()
-        # c = canvas.Canvas(pdf_buffer)
-        # c.drawString(100, 750, f"Ninjapivot Report for Job ID: {job_id}")
-        # c.drawString(100, 730, "Analysis complete.")
-        # c.showPage()
-        # c.save()
-        # pdf_buffer.seek(0)
-        # job["pdf"] = pdf_buffer.read()
-        
         job["is_complete"] = True
         
         await asyncio.sleep(2)
-        job = jobs[job_id] = None
         
         
     except Exception as e:
+        raise e
         job["error"] = str(e)
         job["status_message"] = "Failed"
         job["is_complete"] = False
@@ -141,7 +212,8 @@ async def job_progress(job_id: str):
             "timestamp": asyncio.get_running_loop().time(),
             "job_id": job_id,
             "progress": job.get("progress", 0),
-            "status_message": job.get("status_message", "Processing...")
+            "status_message": job.get("status_message", "Processing..."),
+            "is_complete": job.get("is_complete", False),
         }
         logger.debug(f"Sending SSE data: {data}")
         yield f"data: {json.dumps(data)}\n\n"
@@ -169,14 +241,46 @@ async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundT
         "pdf": None
     }
     
-    # Optionally load the CSV file into a pandas DataFrame (for logging or validation)
-    df = pd.read_csv(file.file)
-    print(df.head())
+    # Save the uploaded file to a temporary directory
+    file_path = CACHE_DIR / job_id
+    file_path.mkdir(parents=True, exist_ok=True)
+    file_path = file_path / file.filename
+    with open(file_path, "wb") as f:
+        f.write(file.file.read())
     
     # Start background processing using our process_job function
-    background_tasks.add_task(process_job, job_id, file)
+    background_tasks.add_task(process_job, job_id, file_path)
     
     return JSONResponse(status_code=201, content={"job_id": job_id, "message": "File accepted for processing."})
+
+
+
+
+@app.get("/result/{job_id}")
+async def get_result(job_id: str, download: bool = Query(False)):
+    """
+    Returns the generated PDF report for a completed job.
+    If 'download=true' is provided as a query parameter, the PDF is sent with a Content-Disposition header to prompt a download.
+    """
+    job = jobs.get(job_id)
+    if not job or not job.get("is_complete"):
+        raise HTTPException(status_code=404, detail="No results available for this job")
+    if not job.get("pdf"):
+        raise HTTPException(status_code=500, detail="PDF generation failed")
+    
+    pdf_bytes = job["pdf"]
+    response = StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf")
+    if download:
+        response.headers["Content-Disposition"] = "attachment; filename=report.pdf"
+    else:
+        response.headers["Content-Disposition"] = "inline; filename=report.pdf"
+        
+    # jobs[job_id] = None
+
+    return response
+
+
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -93,7 +93,9 @@ function App() {
 
         // Once complete, stop polling and set the PDF URL
         if (data.is_complete) {
-          setPdfUrl(`/result/${jobId}`);
+          setPdfUrl(`http://127.0.0.1:8000/result/${jobId}`);
+          console.debug("PDF URL set");
+          eventSource.close();
         }
         
         
@@ -112,31 +114,7 @@ function App() {
     };
   }, [jobId]);
   
-  // // Poll the backend for status updates once a jobId is set
-  // useEffect(() => {
-  //   if (!jobId) return;
-  //   pollingIntervalRef.current = setInterval(async () => {
-  //     try {
-  //       const res = await axios.get(`/status/${jobId}`);
-  //       const statusData = res.data;
-  //       setProgress(statusData.progress);
-  //       setStatusMessage(statusData.status_message);
-  //       setIsComplete(statusData.is_complete);
 
-  //       // Once complete, stop polling and set the PDF URL
-  //       if (statusData.is_complete) {
-  //         clearInterval(pollingIntervalRef.current);
-  //         setPdfUrl(`/result/${jobId}`);
-  //       }
-  //     } catch (err) {
-  //       console.error(err);
-  //       setError(err.response?.data?.error || 'An unexpected error occurred while checking status.');
-  //       clearInterval(pollingIntervalRef.current);
-  //     }
-  //   }, 3000); // Poll every 3 seconds
-
-  //   return () => clearInterval(pollingIntervalRef.current);
-  // }, [jobId]);
 
   // Render the upload page if no job has been initiated
   if (!jobId) {
@@ -214,6 +192,7 @@ function App() {
       </header>
       <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl">
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+        
         {!isComplete ? (
           // Progress indicator while analysis is in progress
           <div className="text-center">
@@ -253,6 +232,7 @@ function App() {
             </div>
           </div>
         )}
+        
       </div>
       {/* Footer */}
       <footer className="mt-8 text-gray-500 text-xs">
