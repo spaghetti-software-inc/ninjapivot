@@ -15,13 +15,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+import sys
 import asyncio
 import random
 import json
 import uuid
 
 import pandas as pd
+
+
+import rich
+from rich.progress import Progress
+from rich.traceback import install
+install()
+from rich import print
+
+
+from loguru import logger
+logger.remove()
+
+log_level = "DEBUG"
+
+log_format_stdout = "<blue>{time:%Y-%m-%d %I:%M:%S %p %Z}</blue> | <level>{level}</level> | <b>{message}</b>"
+logger.add(sys.stderr, level=log_level, format=log_format_stdout, colorize=True, backtrace=False, diagnose=False)
+
+
 
 # Global in-memory storage for job statuses
 jobs = {}
@@ -75,6 +93,10 @@ async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundT
     }
     # # Launch the background task to simulate processing
     # background_tasks.add_task(process_job, job_id, file)
+
+    # load the CSV file into a pandas DataFrame
+    df = pd.read_csv(file.file)
+    print(df.head())
 
     return JSONResponse(status_code=201, content={"job_id": job_id, "message": "File accepted for processing."})
 
