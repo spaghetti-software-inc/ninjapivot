@@ -103,10 +103,10 @@ async def process_job(job_id: str, file: UploadFile):
             job["progress"] = progress
             await asyncio.sleep(3)  # Simulate processing delay
 
-        # # Finalizing step
-        # job["status_message"] = get_humorous_status("complete")
-        # job["progress"] = 100
-        # await asyncio.sleep(2)
+        # Finalizing step
+        job["status_message"] = get_humorous_status("complete")
+        job["progress"] = 100
+        #await asyncio.sleep(2)
 
         # # Generate a dummy PDF report using ReportLab
         # from reportlab.pdfgen import canvas
@@ -119,13 +119,17 @@ async def process_job(job_id: str, file: UploadFile):
         # pdf_buffer.seek(0)
         # job["pdf"] = pdf_buffer.read()
         
-        
         job["is_complete"] = True
+        
+        await asyncio.sleep(2)
+        job = jobs[job_id] = None
+        
         
     except Exception as e:
         job["error"] = str(e)
         job["status_message"] = "Failed"
         job["is_complete"] = False
+
 
 # SSE endpoint to stream the actual job progress
 async def job_progress(job_id: str):
@@ -139,12 +143,14 @@ async def job_progress(job_id: str):
             "progress": job.get("progress", 0),
             "status_message": job.get("status_message", "Processing...")
         }
+        logger.debug(f"Sending SSE data: {data}")
         yield f"data: {json.dumps(data)}\n\n"
         await asyncio.sleep(1)
 
 @app.get("/sse/job_progress/{job_id}")
 async def sse_endpoint(job_id: str):
     return StreamingResponse(job_progress(job_id), media_type="text/event-stream")
+
 
 @app.post("/upload")
 async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
