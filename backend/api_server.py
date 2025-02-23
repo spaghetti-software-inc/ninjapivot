@@ -3,6 +3,25 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Q
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+import sys
+import asyncio
+import random
+import json
+import uuid
+from io import BytesIO
+
+import pandas as pd
+
+from rich.progress import Progress
+from rich.traceback import install
+install()
+from rich import print
+
+from loguru import logger
+logger.remove()
+log_level = "DEBUG"
+log_format_stdout = "<blue>{time:%Y-%m-%d %I:%M:%S %p %Z}</blue> | <level>{level}</level> | <b>{message}</b>"
+logger.add(sys.stderr, level=log_level, format=log_format_stdout, colorize=True, backtrace=False, diagnose=False)
 
 app = FastAPI()
 
@@ -14,32 +33,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-import sys
-import asyncio
-import random
-import json
-import uuid
-
-import pandas as pd
-
-
-import rich
-from rich.progress import Progress
-from rich.traceback import install
-install()
-from rich import print
-
-
-from loguru import logger
-logger.remove()
-
-log_level = "DEBUG"
-
-log_format_stdout = "<blue>{time:%Y-%m-%d %I:%M:%S %p %Z}</blue> | <level>{level}</level> | <b>{message}</b>"
-logger.add(sys.stderr, level=log_level, format=log_format_stdout, colorize=True, backtrace=False, diagnose=False)
-
-
 
 # Global in-memory storage for job statuses
 jobs = {}
@@ -92,15 +85,59 @@ def get_humorous_status(stage: str) -> str:
     """
     return random.choice(STATUS_MESSAGES.get(stage, ["Processing…"]))
 
+async def process_job(job_id: str, file: UploadFile):
+    """
+    Simulates CSV processing and PDF report generation while updating job status with humorous messages.
+    """
+    job = jobs[job_id]
+    try:
+        # Example processing steps with humorous updates:
+        steps = [
+            ("validating", 20),
+            ("analyzing", 50),
+            ("generating", 80),
+            ("finalizing", 95)
+        ]
+        for stage, progress in steps:
+            job["status_message"] = get_humorous_status(stage)
+            job["progress"] = progress
+            await asyncio.sleep(3)  # Simulate processing delay
 
+        # # Finalizing step
+        # job["status_message"] = get_humorous_status("complete")
+        # job["progress"] = 100
+        # await asyncio.sleep(2)
 
+        # # Generate a dummy PDF report using ReportLab
+        # from reportlab.pdfgen import canvas
+        # pdf_buffer = BytesIO()
+        # c = canvas.Canvas(pdf_buffer)
+        # c.drawString(100, 750, f"Ninjapivot Report for Job ID: {job_id}")
+        # c.drawString(100, 730, "Analysis complete.")
+        # c.showPage()
+        # c.save()
+        # pdf_buffer.seek(0)
+        # job["pdf"] = pdf_buffer.read()
+        
+        
+        job["is_complete"] = True
+        
+    except Exception as e:
+        job["error"] = str(e)
+        job["status_message"] = "Failed"
+        job["is_complete"] = False
+
+# SSE endpoint to stream the actual job progress
 async def job_progress(job_id: str):
     while True:
+        job = jobs.get(job_id)
+        if not job:
+            break
         data = {
             "timestamp": asyncio.get_running_loop().time(),
             "job_id": job_id,
-            "progress": random.uniform(10, 100),
-            "status_message": "Processing...",
+            "progress": job.get("progress", 0),
+            "status_message": job.get("status_message", "Processing...")
         }
         yield f"data: {json.dumps(data)}\n\n"
         await asyncio.sleep(1)
@@ -108,8 +145,6 @@ async def job_progress(job_id: str):
 @app.get("/sse/job_progress/{job_id}")
 async def sse_endpoint(job_id: str):
     return StreamingResponse(job_progress(job_id), media_type="text/event-stream")
-
-
 
 @app.post("/upload")
 async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
@@ -119,24 +154,23 @@ async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundT
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Invalid file format. Please upload a CSV file.")
     
-    #Create a unique job identifier
+    # Create a unique job identifier
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "progress": 0,
-        "status_message": "File accepted for processing.",
+        "status_message": get_humorous_status("accepted"),
         "is_complete": False,
         "pdf": None
     }
-    # # Launch the background task to simulate processing
-    # background_tasks.add_task(process_job, job_id, file)
-
-    # load the CSV file into a pandas DataFrame
+    
+    # Optionally load the CSV file into a pandas DataFrame (for logging or validation)
     df = pd.read_csv(file.file)
     print(df.head())
-
+    
+    # Start background processing using our process_job function
+    background_tasks.add_task(process_job, job_id, file)
+    
     return JSONResponse(status_code=201, content={"job_id": job_id, "message": "File accepted for processing."})
-
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
