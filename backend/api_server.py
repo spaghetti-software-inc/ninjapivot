@@ -59,6 +59,22 @@ async def sse_endpoint():
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+async def job_progress(job_id: str):
+    while True:
+        data = {
+            "timestamp": asyncio.get_running_loop().time(),
+            "job_id": job_id,
+            "progress": random.uniform(10, 100),
+            "status_message": "Processing...",
+        }
+        yield f"data: {json.dumps(data)}\n\n"
+        await asyncio.sleep(1)
+
+@app.get("/sse/job_progress/{job_id}")
+async def sse_endpoint(job_id: str):
+    return StreamingResponse(job_progress(job_id), media_type="text/event-stream")
+
+
 
 @app.get("/api/hello")
 async def read_root():

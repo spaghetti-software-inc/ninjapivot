@@ -67,6 +67,8 @@ function App() {
       const data = await response.json();
       setJobId(data.job_id);
       
+      console.debug(`Job ID: ${data.job_id}`);
+      
     } catch (err) {
       console.error(err);
       setError('An unexpected error occurred during upload.');
@@ -74,13 +76,14 @@ function App() {
     setIsUploading(false);
   };
 
-  // Poll the backend for status updates once a jobId is set
   useEffect(() => {
     if (!jobId) return;
-    pollingIntervalRef.current = setInterval(async () => {
+    const eventSource = new EventSource("http://127.0.0.1:8000/sse/job_progress/" + jobId);
+
+    eventSource.onmessage = (event) => {
       try {
-        const res = await axios.get(`/status/${jobId}`);
-        const statusData = res.data;
+        const data = JSON.parse(event.data);
+        
         setProgress(statusData.progress);
         setStatusMessage(statusData.status_message);
         setIsComplete(statusData.is_complete);
@@ -90,15 +93,48 @@ function App() {
           clearInterval(pollingIntervalRef.current);
           setPdfUrl(`/result/${jobId}`);
         }
-      } catch (err) {
-        console.error(err);
-        setError(err.response?.data?.error || 'An unexpected error occurred while checking status.');
-        clearInterval(pollingIntervalRef.current);
+        
+        
+      } catch (error) {
+        console.error("Error parsing SSE data:", error);
       }
-    }, 3000); // Poll every 3 seconds
+    };
 
-    return () => clearInterval(pollingIntervalRef.current);
-  }, [jobId]);
+    eventSource.onerror = (error) => {
+      console.error("SSE Error:", error);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
+  
+  // // Poll the backend for status updates once a jobId is set
+  // useEffect(() => {
+  //   if (!jobId) return;
+  //   pollingIntervalRef.current = setInterval(async () => {
+  //     try {
+  //       const res = await axios.get(`/status/${jobId}`);
+  //       const statusData = res.data;
+  //       setProgress(statusData.progress);
+  //       setStatusMessage(statusData.status_message);
+  //       setIsComplete(statusData.is_complete);
+
+  //       // Once complete, stop polling and set the PDF URL
+  //       if (statusData.is_complete) {
+  //         clearInterval(pollingIntervalRef.current);
+  //         setPdfUrl(`/result/${jobId}`);
+  //       }
+  //     } catch (err) {
+  //       console.error(err);
+  //       setError(err.response?.data?.error || 'An unexpected error occurred while checking status.');
+  //       clearInterval(pollingIntervalRef.current);
+  //     }
+  //   }, 3000); // Poll every 3 seconds
+
+  //   return () => clearInterval(pollingIntervalRef.current);
+  // }, [jobId]);
 
   // Render the upload page if no job has been initiated
   if (!jobId) {
@@ -108,12 +144,12 @@ function App() {
         <header className="mb-8 text-center">
           <h1 className="text-5xl font-extrabold text-blue-600">Ninjapivot</h1>
           <img src={myLogo} className="logo mx-auto" alt="Ninjapivot logo" />
-          <p className="mt-2 text-xl text-gray-700">Your Automated Statistician</p>
+          <p className="mt-2 text-xl text-gray-700">Your Automated Statistician 📊</p>
         </header>
         {/* Card Section */}
         <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
           <h2 className="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">
-            Upload CSV
+            Upload CSV 
           </h2>
           {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
           <div
@@ -170,8 +206,9 @@ function App() {
     <div className="min-h-screen bg-gray-200 flex flex-col items-center justify-center p-4">
       {/* Header Section */}
       <header className="mb-8 text-center">
-        <h1 className="text-5xl font-extrabold text-blue-600">Ninjapivot</h1>
-        <p className="mt-2 text-xl text-gray-700">Your Automated Statistician</p>
+          <h1 className="text-5xl font-extrabold text-blue-600">Ninjapivot</h1>
+          <img src={myLogo} className="logo mx-auto" alt="Ninjapivot logo" />
+          <p className="mt-2 text-xl text-gray-700">Your Automated Statistician 📊</p>
       </header>
       <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl">
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
