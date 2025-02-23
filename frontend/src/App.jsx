@@ -16,8 +16,6 @@ function App() {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const pollingIntervalRef = useRef(null);
-
   // Drag & drop handlers
   const handleFileDrop = (e) => {
     e.preventDefault();
@@ -76,21 +74,25 @@ function App() {
     setIsUploading(false);
   };
 
+  // Streaming SSE (Server-Sent Events) for real-time updates
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId) {
+      console.debug("No jobId");
+      return;
+    }
     const eventSource = new EventSource("http://127.0.0.1:8000/sse/job_progress/" + jobId);
+    console.debug("EventSource created");
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         
-        setProgress(statusData.progress);
-        setStatusMessage(statusData.status_message);
-        setIsComplete(statusData.is_complete);
+        setProgress(data.progress);
+        setStatusMessage(data.status_message);
+        setIsComplete(data.is_complete);
 
         // Once complete, stop polling and set the PDF URL
-        if (statusData.is_complete) {
-          clearInterval(pollingIntervalRef.current);
+        if (data.is_complete) {
           setPdfUrl(`/result/${jobId}`);
         }
         
@@ -108,7 +110,7 @@ function App() {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [jobId]);
   
   // // Poll the backend for status updates once a jobId is set
   // useEffect(() => {
