@@ -1,5 +1,6 @@
 // App.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 
 import myLogo from './assets/logo_128px.png';
 import './App.css'
@@ -51,7 +52,7 @@ function App() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('/upload', {
+      const response = await fetch('http://127.0.0.1:8000/upload', {
         method: 'POST',
         body: formData,
       });
@@ -65,6 +66,7 @@ function App() {
 
       const data = await response.json();
       setJobId(data.job_id);
+      
     } catch (err) {
       console.error(err);
       setError('An unexpected error occurred during upload.');
@@ -77,14 +79,8 @@ function App() {
     if (!jobId) return;
     pollingIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/status/${jobId}`);
-        if (!res.ok) {
-          const errorData = await res.json();
-          setError(errorData.error || 'Error retrieving status');
-          clearInterval(pollingIntervalRef.current);
-          return;
-        }
-        const statusData = await res.json();
+        const res = await axios.get(`/status/${jobId}`);
+        const statusData = res.data;
         setProgress(statusData.progress);
         setStatusMessage(statusData.status_message);
         setIsComplete(statusData.is_complete);
@@ -96,7 +92,7 @@ function App() {
         }
       } catch (err) {
         console.error(err);
-        setError('An unexpected error occurred while checking status.');
+        setError(err.response?.data?.error || 'An unexpected error occurred while checking status.');
         clearInterval(pollingIntervalRef.current);
       }
     }, 3000); // Poll every 3 seconds
