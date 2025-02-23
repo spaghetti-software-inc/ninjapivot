@@ -1,6 +1,9 @@
 // App.jsx
 import React, { useState, useEffect, useRef } from 'react';
 
+import myLogo from './assets/logo_128px.png';
+import './App.css'
+
 function App() {
   // State variables
   const [file, setFile] = useState(null);
@@ -108,6 +111,7 @@ function App() {
         {/* Header Section */}
         <header className="mb-8 text-center">
           <h1 className="text-5xl font-extrabold text-blue-600">Ninjapivot</h1>
+          <img src={myLogo} className="logo mx-auto" alt="Ninjapivot logo" />
           <p className="mt-2 text-xl text-gray-700">Your Automated Statistician</p>
         </header>
         {/* Card Section */}
