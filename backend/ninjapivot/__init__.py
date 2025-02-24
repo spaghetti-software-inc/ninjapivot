@@ -193,8 +193,9 @@ def run_analysis(df: pd.DataFrame, output_dir: Path) -> dict:
     corr_matrix = get_correlation_matrix(df)
     corr_matrix_latex = tabulate(corr_matrix, headers='keys', tablefmt='latex')
     
-    # Scatter plot matrix
+    # Scatter plot matrix with a title
     scatter_plot_matrix = pd.plotting.scatter_matrix(df, alpha=0.5, figsize=(10, 10), diagonal='kde')
+    plt.suptitle("Scatter Plot Matrix", y=1.02)
     scatter_plot_matrix_path = output_dir / "scatter_plot_matrix.png"
     plt.savefig(scatter_plot_matrix_path, bbox_inches='tight')
     plt.close()
@@ -275,7 +276,7 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     
     tex += "\\section{Regression Plots with Bootstrap Lines}\n"
     for target, plot_file in analysis_results["regression_plots"]:
-        tex += f"\\subsection*{{Regression Plot for {target}}}\n"
+        tex += f"%\\subsection*{{Regression Plot for {target}}}\n"
         tex += '\\centering{\\includegraphics[width=0.8\\textwidth]{%s}}\n' % plot_file
     
     tex += "\\section{Clustering Analysis}\n"
