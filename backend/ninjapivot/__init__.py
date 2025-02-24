@@ -23,6 +23,10 @@ from rich import print
 
 from loguru import logger
 
+# For clustering analysis, we use scikit-learn
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
 CACHE_DIR = Path("./cache")
 
 def get_correlation_matrix(df: pd.DataFrame) -> pd.DataFrame:
@@ -51,8 +55,8 @@ def get_regression_results(df: pd.DataFrame, output_dir: Path, B: int = 100) -> 
     """
     For each column in the DataFrame, treat it as the target (y) and use the remaining columns as predictors.
     Fits a linear regression model using least squares, computes R² and RMSE, and creates a scatter plot
-    of observed vs. predicted values. In addition, uses bootstrap resampling (B iterations) to draw multiple 
-    regression lines on the same plot.
+    of observed vs. predicted values. Additionally, bootstrap resampling (B iterations) is used to draw
+    multiple regression lines on the same plot.
     
     Returns:
       - A LaTeX-formatted table with regression metrics.
@@ -94,13 +98,11 @@ def get_regression_results(df: pd.DataFrame, output_dir: Path, B: int = 100) -> 
         
         # Bootstrap resampling: overlay multiple regression lines
         for _ in range(B):
-            # Resample indices with replacement
             indices = np.random.choice(len(y), size=len(y), replace=True)
             X_boot = X[indices, :]
             y_boot = y[indices]
             beta_boot, _, _, _ = np.linalg.lstsq(X_boot, y_boot, rcond=None)
             y_pred_boot = X @ beta_boot
-            # Fit a simple line (using polyfit) to the bootstrap (observed, predicted) pairs
             slope, intercept = np.polyfit(y, y_pred_boot, 1)
             x_line = np.array([y.min(), y.max()])
             y_line = slope * x_line + intercept
@@ -124,6 +126,60 @@ def get_regression_results(df: pd.DataFrame, output_dir: Path, B: int = 100) -> 
     
     return regression_table_latex, regression_plots
 
+def get_clustering_analysis(df: pd.DataFrame, output_dir: Path, n_clusters: int = 3) -> (str, str):
+    """
+    Performs clustering analysis on the DataFrame. Non-numeric columns are converted to numeric codes.
+    A KMeans algorithm (with n_clusters) is applied, and the results are summarized by:
+      - A LaTeX table showing the number of samples in each cluster and the cluster centers.
+      - A scatter plot of the data in two dimensions (obtained via PCA) with points colored by cluster.
+      
+    Returns:
+      - A LaTeX-formatted table with clustering results.
+      - The filename of the clustering plot.
+    """
+    # Convert non-numeric columns to numeric codes
+    df_numeric = df.copy()
+    for col in df_numeric.columns:
+        if not pd.api.types.is_numeric_dtype(df_numeric[col]):
+            df_numeric[col] = df_numeric[col].astype('category').cat.codes
+
+    # Fit KMeans clustering
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    clusters = kmeans.fit_predict(df_numeric)
+    df_numeric['Cluster'] = clusters
+
+    # Summarize clusters: counts per cluster and cluster centers
+    cluster_counts = df_numeric['Cluster'].value_counts().sort_index()
+    centers = kmeans.cluster_centers_
+    centers_df = pd.DataFrame(centers, columns=df_numeric.columns[:-1])
+    centers_df.insert(0, "Cluster", range(n_clusters))
+    
+    # Create a summary table combining cluster counts and centers
+    summary_table = pd.DataFrame({
+        "Cluster": range(n_clusters),
+        "Count": [cluster_counts[i] for i in range(n_clusters)]
+    }).merge(centers_df, on="Cluster")
+    
+    clustering_table_latex = tabulate(summary_table, headers='keys', tablefmt='latex', showindex=False)
+    
+    # Use PCA to reduce data to 2 dimensions for visualization
+    pca = PCA(n_components=2, random_state=42)
+    pca_result = pca.fit_transform(df_numeric.drop(columns="Cluster"))
+    
+    plt.figure(figsize=(6, 6))
+    scatter = plt.scatter(pca_result[:, 0], pca_result[:, 1], c=clusters, cmap='viridis', alpha=0.7, edgecolor='k')
+    plt.xlabel('PCA Component 1')
+    plt.ylabel('PCA Component 2')
+    plt.title('Clustering Analysis (PCA Projection)')
+    plt.colorbar(scatter, label='Cluster')
+    
+    clustering_plot_filename = "clustering.png"
+    clustering_plot_path = output_dir / clustering_plot_filename
+    plt.savefig(clustering_plot_path, bbox_inches='tight')
+    plt.close()
+    
+    return clustering_table_latex, clustering_plot_filename
+
 def run_analysis(df: pd.DataFrame, output_dir: Path) -> dict:
     """
     Runs a complete analysis on the given DataFrame:
@@ -131,6 +187,7 @@ def run_analysis(df: pd.DataFrame, output_dir: Path) -> dict:
       - Generates a scatter plot matrix.
       - Performs linear regression for each column as target and evaluates performance,
         generating corresponding regression plots with bootstrap lines.
+      - Performs clustering analysis and generates a summary table and PCA plot.
     """
     # Correlation matrix
     corr_matrix = get_correlation_matrix(df)
@@ -145,11 +202,16 @@ def run_analysis(df: pd.DataFrame, output_dir: Path) -> dict:
     # Regression analysis with bootstrap plots
     regression_results_latex, regression_plots = get_regression_results(df, output_dir)
     
+    # Clustering analysis
+    clustering_table_latex, clustering_plot_filename = get_clustering_analysis(df, output_dir)
+    
     return {
         "correlation_matrix": corr_matrix_latex,
         "scatter_plot_matrix": "scatter_plot_matrix.png",
         "regression_results": regression_results_latex,
-        "regression_plots": regression_plots
+        "regression_plots": regression_plots,
+        "clustering_table": clustering_table_latex,
+        "clustering_plot": clustering_plot_filename
     }
 
 def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
@@ -158,8 +220,8 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
       - A preview of the data.
       - The correlation matrix.
       - The scatter plot matrix.
-      - The regression analysis results.
-      - Regression plots with multiple bootstrap lines for each target variable.
+      - The regression analysis results with bootstrap plots.
+      - The clustering analysis results (summary table and PCA plot).
     """
     output_dir = CACHE_DIR / job_id  
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -215,6 +277,13 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     for target, plot_file in analysis_results["regression_plots"]:
         tex += f"\\subsection*{{Regression Plot for {target}}}\n"
         tex += '\\centering{\\includegraphics[width=0.8\\textwidth]{%s}}\n' % plot_file
+    
+    tex += "\\section{Clustering Analysis}\n"
+    tex += "The clustering analysis was performed using KMeans (with 3 clusters). The table below summarizes the cluster counts and centers:\n"
+    tex += "\\begin{center}\n"
+    tex += analysis_results["clustering_table"] + "\n"
+    tex += "\\end{center}\n"
+    tex += '\\centering{\\includegraphics[width=0.8\\textwidth]{%s}}\n' % analysis_results["clustering_plot"]
     
     tex += "\\end{document}\n"
     
