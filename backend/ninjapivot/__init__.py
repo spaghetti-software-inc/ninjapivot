@@ -102,14 +102,13 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     # Generate the LaTeX file
     tex = f"""\\documentclass[12pt,letterpaper]{{article}}\n"""
     tex += '\\usepackage[includehead,headheight=10mm,margin=1cm]{geometry}\n'
-    tex += f"""\\usepackage{{hyperref}}\n"""
     tex += f"""\\usepackage{{graphicx}}\n"""
     tex += f"""\\usepackage{{fontspec}}\n"""
     tex += f"""\\usepackage{{xcolor}}\n"""
     tex += f"""\\usepackage{{array}}\n"""
-    tex += '\\usepackage{longtable}\n'
+    tex += f"""\\usepackage{{longtable}}\n"""
     tex += f"""\\usepackage{{fancyhdr}}\n"""
-
+    
     report_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     tex += f"""\\usepackage[pdfproducer={{diamoro.cx}},pdfsubject={{report ID {job_id} {report_timestamp}}}]{{hyperref}}\n"""
 
@@ -119,7 +118,7 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     tex += '\\fancyhead{}\n'
     tex += '\\renewcommand{\\headrulewidth}{0pt}' + "\n"
 
-    tex += '\\fancyhead[RO,LE]{\\url{www.ninjapivot.com}}' + "\n"
+    tex += '\\fancyhead[RO,LE]{www.ninjapivot.com}' + "\n"
 
     tex += '\\pagenumbering{gobble}\n'
 
