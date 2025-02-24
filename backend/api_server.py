@@ -125,12 +125,12 @@ async def process_job(job_id: str, file: Path):
         
         job["status_message"] = get_humorous_status("validating")
         job["progress"] = 20
-        #await asyncio.sleep(1)
+        await asyncio.sleep(1)
         
 
         job["status_message"] = get_humorous_status("analyzing")
         job["progress"] = 40
-        #await asyncio.sleep(1)
+        await asyncio.sleep(1)
         
         df = pd.read_csv(file)
         
