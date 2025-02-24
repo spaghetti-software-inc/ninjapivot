@@ -17,3 +17,7 @@ def test_pdf_gen():
     assert pdf_path.name == 'main.pdf'
     assert pdf_path.is_file()
     assert pdf_path.stat().st_size > 0
+    
+    
+if __name__ == '__main__':
+    test_pdf_gen()
