@@ -38,7 +38,6 @@ def get_correlation_matrix(df: pd.DataFrame) -> pd.DataFrame:
     cols = df_corr.columns
     corr_matrix = pd.DataFrame(np.zeros((len(cols), len(cols))), index=cols, columns=cols)
 
-    # Compute pairwise Pearson correlation coefficients using scipy.stats.pearsonr
     for i, col1 in enumerate(cols):
         for j, col2 in enumerate(cols):
             if i <= j:
@@ -48,11 +47,12 @@ def get_correlation_matrix(df: pd.DataFrame) -> pd.DataFrame:
                 
     return corr_matrix
 
-def get_regression_results(df: pd.DataFrame, output_dir: Path) -> (str, list):
+def get_regression_results(df: pd.DataFrame, output_dir: Path, B: int = 100) -> (str, list):
     """
     For each column in the DataFrame, treat it as the target (y) and use the remaining columns as predictors.
-    Computes the regression model using least squares, calculates R² and RMSE,
-    and generates a scatter plot of observed vs. predicted values.
+    Fits a linear regression model using least squares, computes R² and RMSE, and creates a scatter plot
+    of observed vs. predicted values. In addition, uses bootstrap resampling (B iterations) to draw multiple 
+    regression lines on the same plot.
     
     Returns:
       - A LaTeX-formatted table with regression metrics.
@@ -74,7 +74,7 @@ def get_regression_results(df: pd.DataFrame, output_dir: Path) -> (str, list):
         # Add an intercept term
         X = np.column_stack([np.ones(X.shape[0]), X])
         
-        # Solve the least squares problem
+        # Full sample regression
         beta, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
         y_pred = X @ beta
         
@@ -86,13 +86,31 @@ def get_regression_results(df: pd.DataFrame, output_dir: Path) -> (str, list):
         
         metrics.append([target, r_squared, rmse])
         
-        # Create regression plot: observed vs. predicted values
+        # Create regression plot: observed vs. predicted
         plt.figure(figsize=(6, 6))
-        plt.scatter(y, y_pred, alpha=0.7, edgecolor='k')
-        plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', lw=2)
+        plt.scatter(y, y_pred, alpha=0.7, edgecolor='k', label='Observed Predictions')
+        # Plot the ideal reference line
+        plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', lw=2, label='Ideal')
+        
+        # Bootstrap resampling: overlay multiple regression lines
+        for _ in range(B):
+            # Resample indices with replacement
+            indices = np.random.choice(len(y), size=len(y), replace=True)
+            X_boot = X[indices, :]
+            y_boot = y[indices]
+            beta_boot, _, _, _ = np.linalg.lstsq(X_boot, y_boot, rcond=None)
+            y_pred_boot = X @ beta_boot
+            # Fit a simple line (using polyfit) to the bootstrap (observed, predicted) pairs
+            slope, intercept = np.polyfit(y, y_pred_boot, 1)
+            x_line = np.array([y.min(), y.max()])
+            y_line = slope * x_line + intercept
+            plt.plot(x_line, y_line, color='gray', alpha=0.1, linewidth=1)
+        
         plt.xlabel('Observed')
         plt.ylabel('Predicted')
         plt.title(f'Regression for {target}')
+        plt.legend()
+        
         plot_filename = f"regression_{target}.png"
         plot_path = output_dir / plot_filename
         plt.savefig(plot_path, bbox_inches='tight')
@@ -100,7 +118,7 @@ def get_regression_results(df: pd.DataFrame, output_dir: Path) -> (str, list):
         
         regression_plots.append((target, plot_filename))
     
-    # Create a DataFrame and convert to LaTeX table
+    # Create a DataFrame for metrics and convert to a LaTeX table
     metrics_df = pd.DataFrame(metrics, columns=["Target", "R-squared", "RMSE"])
     regression_table_latex = tabulate(metrics_df, headers='keys', tablefmt='latex', showindex=False)
     
@@ -109,10 +127,10 @@ def get_regression_results(df: pd.DataFrame, output_dir: Path) -> (str, list):
 def run_analysis(df: pd.DataFrame, output_dir: Path) -> dict:
     """
     Runs a complete analysis on the given DataFrame:
-      - Computes the correlation matrix
-      - Generates a scatter plot matrix
+      - Computes the correlation matrix.
+      - Generates a scatter plot matrix.
       - Performs linear regression for each column as target and evaluates performance,
-        generating corresponding regression plots.
+        generating corresponding regression plots with bootstrap lines.
     """
     # Correlation matrix
     corr_matrix = get_correlation_matrix(df)
@@ -124,7 +142,7 @@ def run_analysis(df: pd.DataFrame, output_dir: Path) -> dict:
     plt.savefig(scatter_plot_matrix_path, bbox_inches='tight')
     plt.close()
     
-    # Regression analysis and plots
+    # Regression analysis with bootstrap plots
     regression_results_latex, regression_plots = get_regression_results(df, output_dir)
     
     return {
@@ -137,11 +155,11 @@ def run_analysis(df: pd.DataFrame, output_dir: Path) -> dict:
 def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     """
     Generates a LaTeX document that includes:
-      - A preview of the data
-      - The correlation matrix
-      - The scatter plot matrix
-      - The regression analysis results
-      - Regression plots for each target variable
+      - A preview of the data.
+      - The correlation matrix.
+      - The scatter plot matrix.
+      - The regression analysis results.
+      - Regression plots with multiple bootstrap lines for each target variable.
     """
     output_dir = CACHE_DIR / job_id  
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -184,18 +202,19 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     tex += "\\end{center}\n"
     
     tex += "\\section{Scatter Plot Matrix}\n"
-    tex += '\\centering{\\includegraphics[width=0.8\\textwidth]{{%s}}}\n' % analysis_results["scatter_plot_matrix"]
+    tex += '\\centering{\\includegraphics[width=8in]{{%s}}}\n' % analysis_results["scatter_plot_matrix"]
     
     tex += "\\section{Regression Analysis}\n"
-    tex += "For each target variable, a linear regression model was fit using the remaining columns as predictors. The table below shows performance metrics (R\\textsuperscript{2} and RMSE):\n"
+    tex += "For each target variable, a linear regression model was fit using the remaining columns as predictors. "
+    tex += "The table below shows performance metrics (R\\textsuperscript{2} and RMSE):\n"
     tex += "\\begin{center}\n"
     tex += analysis_results["regression_results"] + "\n"
     tex += "\\end{center}\n"
     
-    tex += "\\section{Regression Plots}\n"
+    tex += "\\section{Regression Plots with Bootstrap Lines}\n"
     for target, plot_file in analysis_results["regression_plots"]:
         tex += f"\\subsection*{{Regression Plot for {target}}}\n"
-        tex += '\\centering{\\includegraphics[width=0.4\\textwidth]{%s}}\n' % plot_file
+        tex += '\\centering{\\includegraphics[width=0.8\\textwidth]{%s}}\n' % plot_file
     
     tex += "\\end{document}\n"
     
