@@ -172,6 +172,27 @@ function App() {
           <p className="text-xs text-gray-500 mt-4">
             Maximum: 10,000 rows, 100 columns. File size limit: 5 MB.
           </p>
+          {/* Sample CSVs Section */}
+          <div className="mt-8">
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Sample CSVs</h3>
+            <ul className="list-disc list-inside text-gray-700">
+              <li>
+                <a href="/path/to/sample1.csv" className="text-blue-600 hover:underline">
+                  Sample CSV 1
+                </a>
+              </li>
+              <li>
+                <a href="/path/to/sample2.csv" className="text-blue-600 hover:underline">
+                  Sample CSV 2
+                </a>
+              </li>
+              <li>
+                <a href="/path/to/sample3.csv" className="text-blue-600 hover:underline">
+                  Sample CSV 3
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
         {/* Footer */}
         <footer className="mt-8 text-gray-500 text-xs">
