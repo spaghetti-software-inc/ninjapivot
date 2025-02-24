@@ -15,10 +15,14 @@ from io import BytesIO
 from datetime import datetime
 
 import pandas as pd
+import numpy as np
+from scipy.stats import pearsonr
+
 from matplotlib import pyplot as plt
 
+from tabulate import tabulate
 
-from rich.progress import Progress
+
 from rich.traceback import install
 install()
 from rich import print
@@ -29,7 +33,6 @@ log_level = "DEBUG"
 log_format_stdout = "<blue>{time:%Y-%m-%d %I:%M:%S %p %Z}</blue> | <level>{level}</level> | <b>{message}</b>"
 logger.add(sys.stderr, level=log_level, format=log_format_stdout, colorize=True, backtrace=False, diagnose=False)
 
-CACHE_DIR =  Path("./cache")
 
 app = FastAPI()
 
@@ -41,6 +44,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+import ninjapivot as ninja
 
 # Global in-memory storage for job statuses
 jobs = {}
@@ -94,6 +100,9 @@ def get_humorous_status(stage: str) -> str:
     return random.choice(STATUS_MESSAGES.get(stage, ["Processing…"]))
 
 
+
+
+
 async def process_job(job_id: str, file: Path):
     """
     Simulates CSV processing and PDF report generation while updating job status with humorous messages.
@@ -116,64 +125,20 @@ async def process_job(job_id: str, file: Path):
         
         job["status_message"] = get_humorous_status("validating")
         job["progress"] = 20
-        await asyncio.sleep(1)
+        #await asyncio.sleep(1)
         
-        df = pd.read_csv(file)
-        print(df.head())
-        
-        output_dir = CACHE_DIR / job_id
-        output_dir.mkdir(parents=True, exist_ok=True)
-        pdf_path = output_dir / "main.pdf"
 
         job["status_message"] = get_humorous_status("analyzing")
         job["progress"] = 40
-        await asyncio.sleep(1)
-
-        ########################################################################################
-        # Generate the LaTeX file
-        tex = f"""\\documentclass[12pt,letterpaper]{{article}}\n"""
-        tex += '\\usepackage[includehead,headheight=10mm,margin=1cm]{geometry}\n'
-        tex += f"""\\usepackage{{graphicx}}\n"""
-        tex += f"""\\usepackage{{fontspec}}\n"""
-        tex += f"""\\usepackage{{xcolor}}\n"""
-        tex += f"""\\usepackage{{array}}\n"""
-        tex += '\\usepackage{longtable}\n'
-        tex += f"""\\usepackage{{fancyhdr}}\n"""
-
-        report_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        tex += f"""\\usepackage[pdfproducer={{diamoro.cx}},pdfsubject={{report ID {job_id} {report_timestamp}}}]{{hyperref}}\n"""
-
-        tex += f"""\\pagestyle{{fancy}}\n"""
-        #tex += f"""\\geometry{{margin=1in}}\n"""
+        #await asyncio.sleep(1)
         
-        tex += '\\fancyhead{}\n'
-        tex += '\\renewcommand{\\headrulewidth}{0pt}' + "\n"
-
-        tex += '\\fancyhead[RO,LE]{www.ninjapivot.com}' + "\n"
-
-        tex += '\\pagenumbering{gobble}\n'
-
-        tex += '\\graphicspath{{%s}}' % output_dir + "\n"
+        df = pd.read_csv(file)
         
-        tex += "\\begin{document}\n"
-        
-        tex += "Hello, world!\n"
-        
-        tex += "\\end{document}\n"
-        
-        with open(output_dir / "main.tex", "w") as f:
-            f.write(tex)
-
         # generate the PDF
         job["status_message"] = get_humorous_status("generating")
         job["progress"] = 60
 
-        
-        # get the current working directory
-        cwd = Path.cwd()
-        os.chdir(output_dir)
-        os.system("latexmk -lualatex -output-directory=./ ./main.tex")
-        os.chdir(cwd)
+        pdf_path = ninja.gen_latex_document(job_id,  df)
 
 
         logger.info(f"Generated PDF report: {pdf_path}")
@@ -242,7 +207,7 @@ async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundT
     }
     
     # Save the uploaded file to a temporary directory
-    file_path = CACHE_DIR / job_id
+    file_path = ninja.CACHE_DIR / job_id
     file_path.mkdir(parents=True, exist_ok=True)
     file_path = file_path / file.filename
     with open(file_path, "wb") as f:
