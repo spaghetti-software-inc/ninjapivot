@@ -55,7 +55,7 @@ def get_correlation_matrix(df: pd.DataFrame) -> pd.DataFrame:
                 
     return corr_matrix
 
-def run_analysis(df: pd.DataFrame) -> dict:
+def run_analysis(df: pd.DataFrame, output_dir : Path) -> dict:
     """
     Runs a simple analysis on the given DataFrame:
     - Computes the correlation matrix
@@ -63,13 +63,20 @@ def run_analysis(df: pd.DataFrame) -> dict:
     """
     # Compute the correlation matrix
     corr_matrix = get_correlation_matrix(df)
+    corr_matrix_latex = tabulate(corr_matrix, headers='keys', tablefmt='latex')
     
     # Generate a scatter plot matrix
     scatter_plot_matrix = pd.plotting.scatter_matrix(df, alpha=0.5, figsize=(10, 10), diagonal='kde')
     
+    # save the scatter plot matrix to a file
+    scatter_plot_matrix_path = output_dir / "scatter_plot_matrix.png"
+    plt.savefig(scatter_plot_matrix_path)
+    plt.close()
+    
+    
     return {
-        "correlation_matrix": corr_matrix,
-        "scatter_plot_matrix": scatter_plot_matrix
+        "correlation_matrix": corr_matrix_latex,
+        "scatter_plot_matrix": "scatter_plot_matrix.png"
     }
 
 def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
@@ -81,11 +88,13 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
 
 
     df_head_latex = tabulate(df.head(), headers='keys', tablefmt='latex')
-    print(df_head_latex)
+    # print(df_head_latex)
     
     # Run the analysis
-    analysis_results = run_analysis(df)
-    print(analysis_results)
+    analysis_results = run_analysis(df, output_dir)
+    
+    
+    # print(analysis_results)
     
     
 
@@ -93,6 +102,7 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     # Generate the LaTeX file
     tex = f"""\\documentclass[12pt,letterpaper]{{article}}\n"""
     tex += '\\usepackage[includehead,headheight=10mm,margin=1cm]{geometry}\n'
+    tex += f"""\\usepackage{{hyperref}}\n"""
     tex += f"""\\usepackage{{graphicx}}\n"""
     tex += f"""\\usepackage{{fontspec}}\n"""
     tex += f"""\\usepackage{{xcolor}}\n"""
@@ -109,7 +119,7 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     tex += '\\fancyhead{}\n'
     tex += '\\renewcommand{\\headrulewidth}{0pt}' + "\n"
 
-    tex += '\\fancyhead[RO,LE]{www.ninjapivot.com}' + "\n"
+    tex += '\\fancyhead[RO,LE]{\\url{www.ninjapivot.com}}' + "\n"
 
     tex += '\\pagenumbering{gobble}\n'
 
@@ -121,6 +131,13 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     tex += "\\begin{center}\n"
     tex += df_head_latex + "\n"
     tex += "\\end{center}\n"
+    
+    tex += "\\section{Correlation}\n"
+    tex += "\\begin{center}\n"
+    tex += analysis_results["correlation_matrix"] + "\n"
+    tex += "\\end{center}\n"
+    
+    tex += '\\centering{\\includegraphics[width=8in]{{%s}}}' % analysis_results["scatter_plot_matrix"] + "\n"    
     
     tex += "\\end{document}\n"
     
