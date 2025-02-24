@@ -22,6 +22,9 @@ from rich.traceback import install
 install()
 from rich import print
 
+from loguru import logger
+
+
 CACHE_DIR =  Path("./cache")
 
 
@@ -115,7 +118,9 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
     tex += "\\begin{document}\n"
     
     tex += "\\section{Data}\n"
+    tex += "\\begin{center}\n"
     tex += df_head_latex + "\n"
+    tex += "\\end{center}\n"
     
     tex += "\\end{document}\n"
     
@@ -128,6 +133,7 @@ def gen_latex_document(job_id: str, df: pd.DataFrame) -> Path:
         f.write(tex)
 
     # get the current working directory
+    logger.info(f"Generating PDF report: {pdf_path}")
     cwd = Path.cwd()
     os.chdir(output_dir)
     os.system("latexmk -lualatex -output-directory=./ ./main.tex")
