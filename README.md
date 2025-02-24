@@ -1,5 +1,11 @@
 # autoninja
 
+
+https://github.com/user-attachments/assets/7f688221-ad35-4b92-bf74-d5bc03d66613
+
+
+
+
 ## Front-End
 Below is a concise set of **requirements and design specifications** for the Ninjapivot front-end MVP, using **React + Vite** for the application scaffolding and **TailwindCSS** for styling.
 
